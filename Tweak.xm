@@ -1,11 +1,14 @@
 @import Foundation;
 @import UIKit;
+@import QuartzCore;
 
+// --- Interfaces ---
 @interface MTMaterialView : UIView
+- (id)_viewControllerForAncestor;
 @end
 
 @interface CCUIContentModuleContentContainerView : UIView {
-	MTMaterialView *_moduleMaterialView;
+    MTMaterialView *_moduleMaterialView;
 }
 @end
 
@@ -14,7 +17,7 @@
 @end
 
 @interface FCUIActivityControl : UIView {
-	MTMaterialView *_backgroundView;
+    MTMaterialView *_backgroundView;
 }
 @end
 
@@ -23,124 +26,101 @@
 @end
 
 @interface _FCUIAddActivityControl : UIView {
-	MTMaterialView *_backgroundMaterialView;
+    MTMaterialView *_backgroundMaterialView;
 }
-@end
-
-@interface MTMaterialView (Private)
-- (id)_viewControllerForAncestor;
 @end
 
 @interface MediaControlsVolumeSliderView : UIView {
-	UIView *_materialView;
+    UIView *_materialView;
 }
 @end
 
-%hook CCUIContentModuleContentContainerView
-// Most CC modules
-- (void)layoutSubviews {
-	%orig;
-	MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_moduleMaterialView");
-	if (!matView) return;
+// --- Helper Logic ---
+// Hàm dùng chung để tránh lặp code và đảm bảo an toàn
+static void ApplyCCBorderStyle(UIView *mainView, UIView *backgroundView) {
+    if (!mainView || !backgroundView || !mainView.window) return;
 
-	[matView setAlpha:0.0];
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:matView.layer.cornerRadius];
+    // Ẩn nền gốc
+    [backgroundView setAlpha:0.0];
+    backgroundView.hidden = YES;
+
+    // Cấu hình viền cho View chính
+    mainView.layer.borderWidth = 1.0;
+    mainView.layer.borderColor = [UIColor whiteColor].CGColor;
+    mainView.layer.cornerRadius = backgroundView.layer.cornerRadius;
+    mainView.layer.masksToBounds = YES; 
 }
 
+// --- Hooks ---
+
+%hook CCUIContentModuleContentContainerView
+- (void)layoutSubviews {
+    %orig;
+    MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_moduleMaterialView");
+    ApplyCCBorderStyle(self, matView);
+}
 %end
 
 %hook MRUContinuousSliderView
-// Volume slider iOS 16+
 - (void)layoutSubviews {
-	%orig;
-	if (!self.materialView) return;
-
-	[self.materialView setAlpha:0.0];
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:self.materialView.layer.cornerRadius];
+    %orig;
+    if ([self respondsToSelector:@selector(materialView)]) {
+        ApplyCCBorderStyle(self, self.materialView);
+    }
 }
-
 %end
 
 %hook MediaControlsVolumeSliderView
-// Volume slider iOS 15-
 - (void)layoutSubviews {
-	%orig;
-	
-	MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_materialView");
-	if (!matView) return;
-
-	[matView setAlpha:0.0];
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:matView.layer.cornerRadius];
+    %orig;
+    UIView *matView = MSHookIvar<UIView *>(self, "_materialView");
+    ApplyCCBorderStyle(self, matView);
 }
-
 %end
 
 %hook FCUIActivityControl
-// 3d touch on focus
 - (void)layoutSubviews {
-	%orig;
-
-	MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_backgroundView");
-	if (!matView) return;
-
-	[matView setAlpha:0.0];
-
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:matView.layer.cornerRadius];
+    %orig;
+    MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_backgroundView");
+    ApplyCCBorderStyle(self, matView);
 }
-
 %end
 
 %hook MRUControlCenterView
-// Music player
-
 - (void)layoutSubviews {
-	%orig;
-	if (!self.materialView) return;
-
-	[self.materialView setAlpha:0.0];
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:self.materialView.layer.cornerRadius];
+    %orig;
+    if ([self respondsToSelector:@selector(materialView)]) {
+        ApplyCCBorderStyle(self, self.materialView);
+    }
 }
-
 %end
 
 %hook _FCUIAddActivityControl
-// tiny + button when 3d touching on dnd module
 - (void)layoutSubviews {
-	%orig;
-
-	MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_backgroundMaterialView");
-	if (!matView) return;
-
-	[matView setAlpha:0.0];
-
-	self.layer.borderWidth = 1.0;
-	self.layer.borderColor = [UIColor whiteColor].CGColor;
-	[self.layer setCornerRadius:matView.layer.cornerRadius];
+    %orig;
+    MTMaterialView *matView = MSHookIvar<MTMaterialView *>(self, "_backgroundMaterialView");
+    ApplyCCBorderStyle(self, matView);
 }
-
 %end
 
 %hook MTMaterialView
-// dnd module
 - (void)layoutSubviews {
-	%orig;
-	if ([[self _viewControllerForAncestor] isKindOfClass:NSClassFromString(@"FCCCControlCenterModule")]) {
-		[self setAlpha:0.0];
-
-		self.superview.layer.borderWidth = 1.0;
-		self.superview.layer.borderColor = [UIColor whiteColor].CGColor;
-		[self.superview.layer setCornerRadius:self.layer.cornerRadius];
-	}
+    %orig;
+    // Xử lý riêng cho module Focus (DND)
+    if ([self respondsToSelector:@selector(_viewControllerForAncestor)]) {
+        id vc = [self _viewControllerForAncestor];
+        if ([vc isKindOfClass:NSClassFromString(@"FCCCControlCenterModule")]) {
+            [self setAlpha:0.0];
+            self.hidden = YES;
+            
+            UIView *parent = self.superview;
+            if (parent) {
+                parent.layer.borderWidth = 1.0;
+                parent.layer.borderColor = [UIColor whiteColor].CGColor;
+                parent.layer.cornerRadius = self.layer.cornerRadius;
+                parent.layer.masksToBounds = YES;
+            }
+        }
+    }
 }
-
 %end
