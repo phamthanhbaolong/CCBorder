@@ -1,0 +1,26 @@
+name: Build CCBorder
+
+on:
+  workflow_dispatch: # Cho phép bấm nút Build thủ công
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Prepare Theos
+        uses: theos/setup-theos-action@v1
+        with:
+          archs: 'arm64 arm64e'
+
+      - name: Build Package
+        run: |
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: CCBorder-Rootless
+          path: packages/*.deb
