@@ -1,1 +1,8 @@
-{ Filter = { Bundles = ( "com.apple.springboard" ); }; }
+{
+    Filter = {
+        Bundles = (
+            "com.apple.ControlCenter",
+            "com.apple.springboard"
+        );
+    };
+}
